@@ -436,13 +436,38 @@ app.post('/api/chat-stream', async (req: Request, res: Response) => {
   const activeAgent = targetAgent;
   const harness = config.harnesses.find((h) => h.id === activeAgent.harnessId) || config.harnesses[0];
 
+  const session = getSessionDetail(targetSessionId);
+  const managerAgentId = session?.managerAgentId || '';
+  const managerAgent = config.agents.find((a) => a.id === managerAgentId);
+  const managerName = managerAgent ? managerAgent.name : '无';
+
+  const deliveryProtocol = `
+=== [MANDATORY DELIVERABLE & WORK SUMMARY PROTOCOL] ===
+When you complete your assigned task, you MUST format your output with this EXACT structured section at the very top of your response:
+
+🔔 [交付通知]
+• 👤 @用户: @${userNicknameToUse}
+• 👑 @管理者: @${managerName}
+• 🎯 @下一个接收Agent: [下一阶段接收任务的 Agent 名字, 例如 @老罗, 或 @无 if this is the final step]
+
+📝 [工作总结]
+1. 交付产物: [简述交付的文件、功能或分析报告]
+2. 物理变更: [列出修改或创建的文件路径、执行的命令]
+3. 验证结果: [编译、Lint 校验或测试结果，如 "Vite build 100% 成功"]
+
+💬 [交付给下一阶段 Agent 的补充说明]
+[提供给下个接收角色的交接注释、风格偏好或重点关注项]
+
+=======================================================
+`.trim();
+
   console.log(`\n========================================`);
   console.log(`⚡ [SSE CLI 模式] 收到指令 (Session: ${targetSessionId}): "${cleanedPrompt}"`);
   console.log(`🤖 Agent: [${activeAgent.name}], Harness: [${harness.name}]`);
   console.log(`========================================`);
 
   const agentManifest = getAgentManifestString();
-  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}\n\n${agentManifest}`.trim();
+  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}\n\n${agentManifest}\n\n${deliveryProtocol}`.trim();
 
   // 获取会话中此前轮次的对话历史上下文，级联发送，建立多轮会话记忆
   const sessionHistory = getFormattedSessionContext(targetSessionId);
