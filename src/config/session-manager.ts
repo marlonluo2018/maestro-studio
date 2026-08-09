@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { ChatSession, SessionIndexItem, SessionMessage, WorkPlan } from './types.js';
+import { ChatSession, SessionIndexItem, SessionMessage, WorkPlan, DeliverableMeta } from './types.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'maestro-data');
 const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
@@ -189,6 +189,50 @@ export function createSession(
   return newSession;
 }
 
+// 智能正则解析 Agent 回复中的 🔔 [交付通知] 和 📝 [工作总结]
+export function parseDeliverableText(text: string): DeliverableMeta | null {
+  if (!text) return null;
+
+  // 必须含有核心关键字才认为是正式的交付物通知
+  if (!text.includes('交付通知') && !text.includes('工作总结')) {
+    return null;
+  }
+
+  try {
+    // 1. 匹配目标用户 (如: • 👤 @用户: @Marlon 或 @Ning)
+    const userMatch = text.match(/@用户\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/👤\s*@?用户\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const targetUser = userMatch ? userMatch[1].trim() : 'Ning';
+
+    // 2. 匹配管理者 (如: • 👑 @管理者: @无 或 @老马)
+    const managerMatch = text.match(/@管理者\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/👑\s*@?管理者\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const managerAgentName = managerMatch ? managerMatch[1].trim() : '无';
+
+    // 3. 匹配下一个接收 Agent (如: • 🎯 @下一个接收Agent: @老罗)
+    const nextMatch = text.match(/@下一个接收Agent\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/🎯\s*@下一个接收Agent\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/🎯\s*@?下一个接收\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const nextAgentName = nextMatch ? nextMatch[1].trim() : '无';
+
+    // 4. 提取 [工作总结] 段落内容
+    let workSummary = "";
+    const summaryMatch = text.match(/📝\s*\[工作总结\]([\s\S]*?)(💬|===|$)/i) || text.match(/\[工作总结\]([\s\S]*?)(💬|===|$)/i);
+    if (summaryMatch) {
+      workSummary = summaryMatch[1].trim();
+    } else {
+      workSummary = "完成阶段性工作交付。";
+    }
+
+    return {
+      targetUser,
+      managerAgentName,
+      nextAgentName,
+      workSummary
+    };
+  } catch (err) {
+    console.error('[Session Manager] Failed to parse deliverable text:', err);
+  }
+
+  return null;
+}
+
 // 向会话中追加消息并原子覆写该独立 session 文件
 export function appendMessageToSession(
   targetSessionId: string,
@@ -205,6 +249,12 @@ export function appendMessageToSession(
     ...assistantMessage,
     text: cleanMessageText(assistantMessage.text)
   };
+
+  // 🌟 自动解析交付物通知并附加结构化元数据 🌟
+  const parsedDeliverable = parseDeliverableText(cleanAssistantMessage.text);
+  if (parsedDeliverable) {
+    cleanAssistantMessage.deliverable = parsedDeliverable;
+  }
 
   if (!session) {
     const cleanPrompt = userMessage.text.trim().replace(/\n/g, ' ');
@@ -230,6 +280,26 @@ export function appendMessageToSession(
     }
     if (activePlan) {
       session.activePlan = activePlan;
+    }
+  }
+
+  // 🌟 自动推动工作计划链条 (Work Plan State Advancement) 🌟
+  if (session.activePlan && session.activePlan.tasks) {
+    // 寻找当前响应 Agent 负责且尚未完成的第一个子任务
+    const activeTaskIdx = session.activePlan.tasks.findIndex(
+      (t) => t.assignedAgentName === assistantMessage.agentName && t.status !== 'completed'
+    );
+
+    if (activeTaskIdx !== -1) {
+      session.activePlan.tasks[activeTaskIdx].status = 'completed';
+      session.activePlan.tasks[activeTaskIdx].output = parsedDeliverable ? parsedDeliverable.workSummary : '完成工作交付。';
+
+      // 自动流转激活下一个子任务
+      if (session.activePlan.tasks[activeTaskIdx + 1]) {
+        session.activePlan.tasks[activeTaskIdx + 1].status = 'in_progress';
+      } else {
+        session.activePlan.status = 'completed'; // 所有子任务执行完毕，计划整体标记完成
+      }
     }
   }
 

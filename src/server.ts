@@ -9,7 +9,8 @@ import {
   appendMessageToSession,
   updateSessionTitle,
   deleteSession,
-  getFormattedSessionContext
+  getFormattedSessionContext,
+  cleanMessageText
 } from './config/session-manager.js';
 import {
   AgentSDKAdapter,
@@ -437,9 +438,9 @@ app.post('/api/chat-stream', async (req: Request, res: Response) => {
   const harness = config.harnesses.find((h) => h.id === activeAgent.harnessId) || config.harnesses[0];
 
   const session = getSessionDetail(targetSessionId);
-  const managerAgentId = session?.managerAgentId || '';
-  const managerAgent = config.agents.find((a) => a.id === managerAgentId);
-  const managerName = managerAgent ? managerAgent.name : '无';
+  const effectiveManagerId = session?.managerAgentId || activeAgent.id;
+  const managerAgent = config.agents.find((a) => a.id === effectiveManagerId);
+  const managerName = managerAgent ? managerAgent.name : activeAgent.name;
 
   const deliveryProtocol = `
 === [MANDATORY DELIVERABLE & WORK SUMMARY PROTOCOL] ===
@@ -457,6 +458,12 @@ When you complete your assigned task, you MUST format your output with this EXAC
 
 💬 [交付给下一阶段 Agent 的补充说明]
 [提供给下个接收角色的交接注释、风格偏好或重点关注项]
+
+⚡ [角色分工硬性准则 (CRITICAL ROLE SEPARATION RULE)]
+- 如果你指定了下一个接收 Agent（即“@下一个接收Agent”不是“@无”），说明你此时扮演的是【分发者/管理者（Router/Manager）】。
+- 在这种情况下，你【严禁自己动手执行最终的具体任务】（例如：不要自己去翻译邮件、不要自己去写具体代码）。
+- 你的回复应该【仅包含交付通知、工作总结（阐述你的分发路由规划）以及交接补充说明（指导下个Agent具体干活）】。具体的脏活累活请100%交由下一个接收Agent去执行，防止工作重复与冗余！
+- 只有当你指定“@下一个接收Agent: @无”时，你才作为【最终执行者（Worker）】输出具体的执行成果（如翻译好的内容、修改好的代码）。
 
 =======================================================
 `.trim();
@@ -505,7 +512,141 @@ When you complete your assigned task, you MUST format your output with this EXAC
       harnessName: harness.name
     };
 
-    const updatedSession = appendMessageToSession(targetSessionId, userMessage, assistantMessage, activeAgent.id);
+    let updatedSession = appendMessageToSession(targetSessionId, userMessage, assistantMessage, activeAgent.id, effectiveManagerId);
+
+    // 🌟 第一个 Agent 完成时立即保存并推送到前端 Checkpoint，保障磁盘 100% 安全落盘 🌟
+    res.write(`data: ${JSON.stringify({ sessionCheckpoint: updatedSession, activeAgentName: activeAgent.name })}\n\n`);
+
+    // 🌟🌟🌟 中央协调编排器核心：链式接棒流转监听 🌟🌟🌟
+    // 检查刚才第一个 Agent 运行结束产生的 deliverable 里是否包含了下一个接收者 nextAgentName
+    const parsedDeliverable = updatedSession.messages[updatedSession.messages.length - 1]?.deliverable;
+    
+    if (parsedDeliverable && parsedDeliverable.nextAgentName && parsedDeliverable.nextAgentName !== '无' && parsedDeliverable.nextAgentName !== activeAgent.name) {
+      const nextAgentNameClean = parsedDeliverable.nextAgentName.replace(/@/g, '').trim();
+      const nextAgent = config.agents.find((a) => a.name === nextAgentNameClean || a.name.includes(nextAgentNameClean));
+
+      if (nextAgent) {
+        console.log(`\n🔗 [Orchestrator] 自动拦截到交付接棒信号！[${activeAgent.name}] ➔ [${nextAgent.name}]`);
+        
+        // 仅推送 activeAgentName 更新前端正在思考工作的 Agent 名字指示器，不写任何合成过渡废话消息！
+        res.write(`data: ${JSON.stringify({ activeAgentName: nextAgent.name, agentName: nextAgent.name })}\n\n`);
+
+        const nextHarness = config.harnesses.find((h) => h.id === nextAgent.harnessId) || config.harnesses[0];
+        const nextAdapter = getSDKAdapter(nextHarness.presetKey);
+        
+        // 组装下一个 Agent 的元系统指令和队友清单
+        const nextAgentIdentityPrompt = `你的名字是「${nextAgent.name}」。\n${nextAgent.systemPrompt || ''}\n\n${agentManifest}\n\n${deliveryProtocol}`.trim();
+        
+        // 提取交接的补充说明段落
+        const handoverMatch = cleanMessageText(finalText).match(/💬\s*\[交付给下一阶段 Agent 的补充说明\]([\s\S]*)/i);
+        const handoverNotes = handoverMatch ? handoverMatch[1].trim() : "请根据上一步工作总结与要求继续完成工作。";
+
+        // 构造给下一个 Agent 的真正输入
+        const nextPrompt = `
+[交接任务指示]
+上一个 Agent [${activeAgent.name}] 已为你完成了前置处理，并为你留下了工作总结与具体交接指示。
+请仔细阅读以下交接内容，并根据当前用户最原始的指令与待处理内容，完成你的专业工作！
+
+工作总结:
+${parsedDeliverable.workSummary}
+
+交付给你的交接补充说明:
+${handoverNotes}
+
+用户最原始的需求与待处理内容:
+${cleanedPrompt}
+`.trim();
+
+        console.log(`[Orchestrator] 正在无感接棒派发给 [${nextAgent.name}] CLI (${nextHarness.name})...`);
+        let nextAccumulatedOutput = '';
+        
+        // 启动下一个 Agent (如老罗 / 老李) 独立原汁原味流式输出
+        const nextResult = await nextAdapter.streamChat(nextPrompt, nextAgentIdentityPrompt, (chunk) => {
+          nextAccumulatedOutput += chunk;
+          res.write(`data: ${JSON.stringify({ chunk, agentName: nextAgent.name, harnessName: nextHarness.name })}\n\n`);
+        });
+
+        // 拼接下一个 Agent 消息对象并独立写盘保存
+        const nextAssistantMessage: SessionMessage = {
+          id: `msg-ast-chained-${Date.now()}`,
+          sender: 'assistant',
+          text: nextAccumulatedOutput.trim() || nextResult.output || '（命令执行结束，无输出返回）',
+          timestamp: formatTimeMin(),
+          agentName: nextAgent.name,
+          harnessName: nextHarness.name
+        };
+
+        // 直接落盘保存该 Agent 自己的独立回复，绝不插入任何虚假 user 消息！
+        updatedSession = appendMessageToSession(targetSessionId, {
+          id: `msg-user-chained-${Date.now()}`,
+          sender: 'user',
+          text: `[自动交接] 指派 ${nextAgent.name} 执行`,
+          timestamp: formatTimeMin(),
+          userNickname: 'Maestro 协调器'
+        }, nextAssistantMessage, nextAgent.id);
+
+        // 🌟🌟🌟 动态 Hub-and-Spoke 管理者闭环 🌟🌟🌟
+        // 检查 Worker (如老袁) 运行结束后的交付物：如果它的 nextAgentName 是 '无'，且当前存在统筹管理者 (如老马)，自动返回管理者做最终汇总与下一阶段决策！
+        const chainedDeliverable = updatedSession.messages[updatedSession.messages.length - 1]?.deliverable;
+        const currentManagerName = managerName !== '无' ? managerName : activeAgent.name;
+        const managerAgentObj = config.agents.find((a) => a.name === currentManagerName || a.name.includes(currentManagerName));
+
+        if (
+          chainedDeliverable &&
+          (!chainedDeliverable.nextAgentName || chainedDeliverable.nextAgentName === '无' || chainedDeliverable.nextAgentName === 'none') &&
+          managerAgentObj &&
+          managerAgentObj.name !== nextAgent.name
+        ) {
+          console.log(`\n👑 [Orchestrator Manager Loop] Worker [${nextAgent.name}] 完成工作，自动返回管理者 [${managerAgentObj.name}] 审阅并做汇总/分发决策...`);
+
+          res.write(`data: ${JSON.stringify({ activeAgentName: managerAgentObj.name, agentName: managerAgentObj.name })}\n\n`);
+
+          const managerHarness = config.harnesses.find((h) => h.id === managerAgentObj.harnessId) || config.harnesses[0];
+          const managerAdapter = getSDKAdapter(managerHarness.presetKey);
+          const managerIdentityPrompt = `你的名字是「${managerAgentObj.name}」。\n${managerAgentObj.systemPrompt || ''}\n\n${agentManifest}\n\n${deliveryProtocol}`.trim();
+
+          const returnToManagerPrompt = `
+[管理者回调审阅指示]
+你指定的 Worker 节点 [${nextAgent.name}] 已完成了分配给它的任务，并提交了工作总结。
+作为统筹管理者 (Manager)，请审阅 [${nextAgent.name}] 的成果，并做最终决策：
+1. 如果所有子任务已全部完成，请为用户 (@${userNicknameToUse}) 给出清晰简洁的总结汇报，并将 @下一个接收Agent 设为 @无。
+2. 如果根据 [${nextAgent.name}] 的分析，还有下一步工作需要其他 Agent 执行，请分配给对应的 Agent 角色（将 @下一个接收Agent 设为对应 Agent 名字）。
+
+Worker [${nextAgent.name}] 的工作总结:
+${chainedDeliverable.workSummary}
+
+Worker [${nextAgent.name}] 的完整输出内容:
+${nextAccumulatedOutput.slice(0, 1500)}
+
+用户最原始的需求:
+${cleanedPrompt}
+`.trim();
+
+          let managerAccumulatedOutput = '';
+          const managerResult = await managerAdapter.streamChat(returnToManagerPrompt, managerIdentityPrompt, (chunk) => {
+            managerAccumulatedOutput += chunk;
+            res.write(`data: ${JSON.stringify({ chunk, agentName: managerAgentObj.name, harnessName: managerHarness.name })}\n\n`);
+          });
+
+          const finalManagerMessage: SessionMessage = {
+            id: `msg-ast-manager-summary-${Date.now()}`,
+            sender: 'assistant',
+            text: managerAccumulatedOutput.trim() || managerResult.output || '（管理者审阅结束）',
+            timestamp: formatTimeMin(),
+            agentName: managerAgentObj.name,
+            harnessName: managerHarness.name
+          };
+
+          updatedSession = appendMessageToSession(targetSessionId, {
+            id: `msg-user-manager-${Date.now()}`,
+            sender: 'user',
+            text: `[管理者回调] 提交 ${nextAgent.name} 成果给 ${managerAgentObj.name} 审阅`,
+            timestamp: formatTimeMin(),
+            userNickname: 'Maestro 协调器'
+          }, finalManagerMessage, managerAgentObj.id);
+        }
+      }
+    }
 
     res.write(`data: ${JSON.stringify({ done: true, session: updatedSession, assistantMessage })}\n\n`);
     res.end();

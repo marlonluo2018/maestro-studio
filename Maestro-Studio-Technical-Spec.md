@@ -134,6 +134,16 @@
 * **6. 系统提示词元工程优化器 (Prompt Meta-Optimizer)**：
   * 为 System Prompt 输入区添加了 `✨ 优化系统提示词` 按钮，通过默认配置的 CLI 引擎极速优化草稿。
   * 采用正则表达式 `match(/```markdown([\s\S]*?)```/i)` 精准抓取大语言模型返回的 Prompt 本身，物理屏蔽废话（如 "Understood"、"Certainly" ），并以 **100% 无弹窗打扰（静默注入）** 的完美 UX 反写填入。
+* **7. Stdin 内存管道流统一驱动 (Stdin Unified Pipeline)**：
+  * 彻底抛弃命令行参数传参，系统提示词、Agent 能力名录、多轮历史对话全部改由 `child.stdin.write` 写入内存流，100% 免疫 Windows 8191 字符命令行超长截断错误。
+* **8. 动态 Hub-and-Spoke 管理者闭环 (Dynamic Orchestrator Loop)**：
+  * Worker Agent 完成任务后，编排器自动捕获交接信号，将控制权、工作总结与上下文自动回调给统筹管理者 Agent（如老马），由管理者决定是否结束并向用户做最终总结汇报，实现任务拆解、分发、执行与汇总的真正闭环。
+* **9. 多 Agent 顺序流式卡片裂变 (Stream Card Spawning)**：
+  * 前端 SSE 解析器感知 `eventData.agentName`，当检测到新 Agent 接棒时，自动在最下方按时间顺序裂变出全新的专属消息卡片，彻底解决打字流合并在同一个卡片中的错位 display Bug。
+* **10. 交互体验精细化 (UX Enhancements)**：
+  * Chat 输入框支持 `Shift + Enter` 换行且在 1~6 行间根据内容动态自适应平滑拉伸。
+  * 消息流生成时平滑自动下滚至最底部（`scrollIntoView`），用户永远优先看到最新生成的内容。
+  * 工作状态指示器 (`⚡ 🤖 【老袁】 正在思考...`) 零延迟实时响应当前实际在工作的 Agent。
 
 ---
 

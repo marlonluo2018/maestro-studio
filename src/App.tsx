@@ -24,12 +24,23 @@ export const App: React.FC = () => {
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [workingAgentName, setWorkingAgentName] = useState<string>('');
 
   // @Mention Dropdown State
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // 自动平滑滚动到消息窗口最底部
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading, workingAgentName]);
 
   // 1. 加载后端 Config 与 Sessions
   useEffect(() => {
@@ -146,7 +157,7 @@ export const App: React.FC = () => {
   };
 
   // --- 监听 @ 输入与 Mention 匹配过滤 ---
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInput(val);
 
@@ -231,6 +242,7 @@ export const App: React.FC = () => {
     setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
     setInput('');
     setLoading(true);
+    setWorkingAgentName(activeAgent.name);
 
     try {
       const res = await fetch('/api/chat-stream', {
@@ -266,14 +278,60 @@ export const App: React.FC = () => {
           try {
             const eventData = JSON.parse(cleanLine);
 
+            // 🌟 1. 零延迟更新指示器：只要收到 agentName 或 activeAgentName 标记，立刻切换正在思考工作的 Agent 名字！ 🌟
+            if (eventData.agentName || eventData.activeAgentName) {
+              setWorkingAgentName(eventData.agentName || eventData.activeAgentName);
+            }
+
             if (eventData.chunk) {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMsgId
-                    ? { ...msg, text: msg.text + eventData.chunk }
-                    : msg
-                )
-              );
+              const chunkAgentName = eventData.agentName || activeAgent.name;
+              const activeHarness = config.harnesses.find((h) => h.id === activeAgent.harnessId);
+              const chunkHarnessName = eventData.harnessName || (activeHarness ? activeHarness.name : 'CLI');
+
+              setMessages((prev) => {
+                // 🌟 2. 顺序卡片裂变：检查列表最后一条消息是否是当前 Agent 的打字卡片 🌟
+                const lastMsg = prev[prev.length - 1];
+
+                if (lastMsg && lastMsg.sender === 'assistant' && lastMsg.agentName === chunkAgentName) {
+                  // 最后一张卡片正是当前 Agent，追加打字字符
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...lastMsg,
+                    text: lastMsg.text + eventData.chunk
+                  };
+                  return updated;
+                } else {
+                  // 最后一张卡片不是当前 Agent（例如老袁完成交接后老马重新接管卡片），在最下方裂变生成全新卡片！
+                  const newAstMsg: SessionMessage = {
+                    id: `msg-ast-stream-${chunkAgentName}-${Date.now()}`,
+                    sender: 'assistant',
+                    text: eventData.chunk,
+                    timestamp: formatTimeMin(),
+                    agentName: chunkAgentName,
+                    harnessName: chunkHarnessName
+                  };
+                  return [...prev, newAstMsg];
+                }
+              });
+            }
+
+            // 检查交接中途产生的落盘 Checkpoint，实时更新 Session 侧边栏与 ID
+            if (eventData.sessionCheckpoint) {
+              const checkpointSession: ChatSession = eventData.sessionCheckpoint;
+              setCurrentSessionId(checkpointSession.id);
+              if (eventData.activeAgentName) {
+                setWorkingAgentName(eventData.activeAgentName);
+              }
+              setSessions((prevSessions) => {
+                const index = prevSessions.findIndex((s) => s.id === checkpointSession.id);
+                if (index !== -1) {
+                  const updated = [...prevSessions];
+                  updated[index] = checkpointSession;
+                  return updated;
+                } else {
+                  return [checkpointSession, ...prevSessions];
+                }
+              });
             }
 
             if (eventData.done && eventData.session) {
@@ -309,7 +367,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showMentionPopup && filteredAgents.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -333,7 +391,11 @@ export const App: React.FC = () => {
     }
 
     if (e.key === 'Enter') {
-      handleSend();
+      if (!e.shiftKey) {
+        e.preventDefault(); // 阻止默认换行，改为直接发送消息
+        handleSend();
+      }
+      // 如果按下了 Shift + Enter，不调用 e.preventDefault()，允许浏览器自然换行！
     }
   };
 
@@ -478,7 +540,7 @@ export const App: React.FC = () => {
               <div>输入指令，或输入 <code style={{ color: '#38bdf8' }}>@</code> 选择特定的 Agent 响应对话...</div>
             </div>
           ) : (
-            messages.map((msg) => {
+            messages.filter((msg) => !msg.text?.startsWith('[自动交接]')).map((msg) => {
               const userDisplayName = msg.userNickname || config.userProfile?.nickname?.trim() || '用户';
               const assistantDisplayName = msg.agentName || activeAgent?.name || 'Maestro 助理';
               const displayName = msg.sender === 'user' ? userDisplayName : assistantDisplayName;
@@ -505,6 +567,7 @@ export const App: React.FC = () => {
               );
             })
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* 底部输入框与 @Mention 浮动选择面板 */}
@@ -545,14 +608,38 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
+          {/* ⚡ 动态 Agent 工作与思考状态指示器 ⚡ */}
+          {loading && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#0f172a',
+                border: '1px solid #38bdf8',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '12px',
+                color: '#38bdf8',
+                marginBottom: '8px',
+                boxShadow: '0 2px 10px rgba(2, 132, 199, 0.15)'
+              }}
+            >
+              <span style={{ fontSize: '13px' }}>⚡</span>
+              <span>
+                <strong>🤖 【{workingAgentName || activeAgent?.name || 'Maestro 智能体'}】</strong> 正在思考与工作，请稍候...
+              </span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            <textarea
               ref={inputRef}
-              type="text"
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={`给 ${activeAgent?.name || 'Maestro'} 下达任务 (输入 @ 快速切唤指定 Agent)...`}
+              placeholder={`给 ${activeAgent?.name || 'Maestro'} 下达任务 (输入 @ 快速切唤指定 Agent，Shift + Enter 换行)...`}
+              rows={Math.min(6, Math.max(1, input.split('\n').length))}
               style={{
                 flex: 1,
                 padding: '12px',
@@ -560,7 +647,14 @@ export const App: React.FC = () => {
                 border: '1px solid #334155',
                 backgroundColor: '#1e293b',
                 color: '#fff',
-                outline: 'none'
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+                maxHeight: '120px',
+                minHeight: '44px',
+                lineHeight: '1.4',
+                boxSizing: 'border-box'
               }}
             />
             <button

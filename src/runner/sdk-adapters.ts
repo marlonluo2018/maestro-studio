@@ -48,7 +48,7 @@ export function cleanCLIOutput(str: string): string {
     }
 
     // 过滤 Codex CLI 头部信息与诊断标志
-    if (/^Reading additional input from stdin/i.test(trimmed)) return false;
+    if (/^Reading (additional input|prompt) from stdin/i.test(trimmed)) return false;
     if (/^OpenAI Codex v\d+/i.test(trimmed)) return false;
     if (/^-{3,}$/.test(trimmed)) return false;
     if (/^(workdir|model|provider|approval|sandbox|reasoning effort|reasoning summaries|session id):/i.test(trimmed)) return false;
@@ -105,11 +105,13 @@ export class ClaudeCodeSDKAdapter implements AgentSDKAdapter {
       const fullSystemPrompt = systemPrompt ? `[系统角色指令: ${systemPrompt}]\n\n` : "";
       const queryPrompt = `${fullSystemPrompt}${prompt}`;
 
-      console.log(`[Claude CLI Runner] 正在通过原生 CLI 指令驱动: claude -p ...`);
+      console.log(`[Claude CLI Runner] 正在通过 Stdin 管道流原生驱动...`);
 
-      // 🌟 核心升级：使用 shell: true。在 Windows 下将换行符替换为空格并用双引号包裹，防止 cmd.exe 将空格截断拆分为多个参数！ 🌟
-      const safePrompt = os.platform() === "win32" ? `"${queryPrompt.replace(/\r?\n/g, " ").replace(/"/g, '\\"')}"` : queryPrompt;
-      const child = spawn("claude", ["-p", safePrompt], { shell: true, env: process.env });
+      // 🌟 核心升级：通过标准输入 (Stdin) 将多行长提示词级联写入，完全绕过 Windows 8191 字符命令行长度限制与转义 bug！ 🌟
+      const exeName = os.platform() === "win32" ? "claude.cmd" : "claude";
+      const child = spawn(exeName, [], { shell: true, env: process.env });
+      
+      child.stdin?.write(queryPrompt);
       child.stdin?.end();
 
       child.stdout?.on("data", (data) => {
@@ -167,14 +169,16 @@ export class CodexSDKAdapter implements AgentSDKAdapter {
   ): Promise<SDKAdapterResult> {
     let accumulatedText = "";
     try {
-      // 🌟 核心升级：使用 shell: true。在 Windows 下将换行符替换为空格并用双引号包裹，防止 cmd.exe 将空格截断拆分为多个参数！ 🌟
-      const safePrompt = os.platform() === "win32" ? `"${prompt.replace(/\r?\n/g, " ").replace(/"/g, '\\"')}"` : prompt;
-      const args = ["exec", safePrompt, "--skip-git-repo-check", "--json"];
-      if (systemPrompt) {
-        const safeSystemPrompt = os.platform() === "win32" ? `"${systemPrompt.replace(/\r?\n/g, " ").replace(/"/g, '\\"')}"` : systemPrompt;
-        args.push("-c", `developer_instructions=${safeSystemPrompt}`);
-      }
-      const child = spawn("codex", args, { shell: true, env: process.env });
+      console.log(`[Codex CLI Runner] 正在通过 Stdin 管道流原生驱动...`);
+
+      // 🌟 核心升级：将系统指令与用户提示词全部合并入 Stdin 内存流写入，彻底消除 -c developer_instructions 参数溢出 8191 字符死穴 🌟
+      const fullPrompt = systemPrompt ? `[系统角色与全局环境规约]:\n${systemPrompt}\n\n[当前用户任务与数据]:\n${prompt}` : prompt;
+      const args = ["exec", "--skip-git-repo-check", "--json"];
+      
+      const exeName = os.platform() === "win32" ? "codex.cmd" : "codex";
+      const child = spawn(exeName, args, { shell: true, env: process.env });
+      
+      child.stdin?.write(fullPrompt);
       child.stdin?.end();
 
       let stdoutBuffer = "";
@@ -295,13 +299,16 @@ export class OpenCodeSDKAdapter implements AgentSDKAdapter {
   ): Promise<SDKAdapterResult> {
     let accumulatedText = "";
     try {
-      // 🌟 核心升级：使用 shell: true。在 Windows 下将换行符替换为空格并用双引号包裹，防止 cmd.exe 将空格截断拆分为多个参数！ 🌟
+      console.log(`[OpenCode CLI Runner] 正在通过 Stdin 管道流原生驱动...`);
+
+      // 🌟 核心升级：通过标准输入 (Stdin) 将多行长提示词级联写入，完全绕过 Windows 8191 字符限制！ 🌟
       const queryPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-      const safePrompt = os.platform() === "win32" ? `"${queryPrompt.replace(/\r?\n/g, " ").replace(/"/g, '\\"')}"` : queryPrompt;
-      const args = ["run", safePrompt, "--auto"];
+      const args = ["run", "--auto"];
 
-      const child = spawn("opencode", args, { shell: true, env: process.env });
+      const exeName = os.platform() === "win32" ? "opencode.cmd" : "opencode";
+      const child = spawn(exeName, args, { shell: true, env: process.env });
 
+      child.stdin?.write(queryPrompt);
       child.stdin?.end();
 
       child.stdout?.on("data", (data) => {
