@@ -8,7 +8,8 @@ import {
   createSession,
   appendMessageToSession,
   updateSessionTitle,
-  deleteSession
+  deleteSession,
+  getFormattedSessionContext
 } from './config/session-manager.js';
 import {
   AgentSDKAdapter,
@@ -302,6 +303,32 @@ app.post('/api/optimize-prompt', async (req: Request, res: Response) => {
   }
 });
 
+// 生成全局 Agent 角色清单字符串，供多 Agent 协同与工作计划生成时参考
+function getAgentManifestString(): string {
+  if (!config.agents || config.agents.length === 0) {
+    return "";
+  }
+
+  let manifest = "\n=== [可用 AI Agent 角色与能力清单 (Agent Manifest)] ===\n";
+  config.agents.forEach((agent, index) => {
+    const harness = config.harnesses.find((h) => h.id === agent.harnessId);
+    manifest += `${index + 1}. 名字: 「${agent.name}」 (ID: ${agent.id})\n`;
+    manifest += `   - 绑定的 CLI: ${harness ? harness.name : '未绑定'}\n`;
+    if (agent.tag) {
+      manifest += `   - 标签定位: ${agent.tag}\n`;
+    }
+    if (agent.systemPrompt) {
+      manifest += `   - 系统人设指令/能力: ${agent.systemPrompt.trim()}\n`;
+    }
+    if (agent.description) {
+      manifest += `   - 职责范围: ${agent.description.trim()}\n`;
+    }
+    manifest += "\n";
+  });
+  manifest += "========================================================\n\n";
+  return manifest;
+}
+
 // 格式化时间为 HH:mm
 function formatTimeMin(): string {
   const d = new Date();
@@ -414,7 +441,12 @@ app.post('/api/chat-stream', async (req: Request, res: Response) => {
   console.log(`🤖 Agent: [${activeAgent.name}], Harness: [${harness.name}]`);
   console.log(`========================================`);
 
-  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}`.trim();
+  const agentManifest = getAgentManifestString();
+  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}\n\n${agentManifest}`.trim();
+
+  // 获取会话中此前轮次的对话历史上下文，级联发送，建立多轮会话记忆
+  const sessionHistory = getFormattedSessionContext(targetSessionId);
+  const finalPromptWithContext = sessionHistory ? `${sessionHistory}当前用户的新指令:\n${cleanedPrompt}` : cleanedPrompt;
 
   // 获取该 Harness CLI 对应的官方 SDK 适配器实例
   const adapter = getSDKAdapter(harness.presetKey);
@@ -422,7 +454,7 @@ app.post('/api/chat-stream', async (req: Request, res: Response) => {
 
   try {
     // 启动流式传输
-    const result = await adapter.streamChat(cleanedPrompt, agentIdentityPrompt, (chunk) => {
+    const result = await adapter.streamChat(finalPromptWithContext, agentIdentityPrompt, (chunk) => {
       accumulatedOutput += chunk;
       // 实时向前端打字机推送纯净字符块！
       res.write(`data: ${JSON.stringify({ chunk, agentName: activeAgent.name, harnessName: harness.name })}\n\n`);

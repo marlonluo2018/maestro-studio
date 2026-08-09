@@ -27,6 +27,13 @@ export interface UserProfile {
   customInstructions: string;// 偏好习惯/自定义 Prompt 约束
 }
 
+export interface DeliverableMeta {
+  targetUser: string;        // 交付的用户昵称, 如 Ning
+  managerAgentName: string;  // 负责统筹的 Agent 名字
+  nextAgentName: string;     // 下一步接收的 Agent 名字
+  workSummary: string;       // 阶段性工作总结
+}
+
 export interface SessionMessage {
   id: string;
   sender: 'user' | 'assistant';
@@ -35,6 +42,24 @@ export interface SessionMessage {
   userNickname?: string;    // 用户发送时的昵称
   agentName?: string;       // 响应该消息的 Agent 名字
   harnessName?: string;     // 响应该消息的 Harness CLI 名称
+  deliverable?: DeliverableMeta; // 结构化交付物通知元数据
+}
+
+export interface WorkPlanTask {
+  id: string;
+  title: string;             // 子任务名称
+  assignedAgentId: string;   // 分配的 Agent ID
+  assignedAgentName: string; // 分配的 Agent 名字
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  output?: string;           // 执行后的输出/成果总结
+}
+
+export interface WorkPlan {
+  id: string;
+  title: string;
+  managerAgentId: string;    // 管理统筹的 Agent ID
+  tasks: WorkPlanTask[];
+  status: 'draft' | 'approved' | 'active' | 'completed';
 }
 
 export interface SessionIndexItem {
@@ -44,6 +69,7 @@ export interface SessionIndexItem {
   updatedAt: string;
   activeAgentId: string;
   messageCount: number;
+  managerAgentId?: string;   // 当前会话统筹管理的 Agent ID
 }
 
 export interface ChatSession {
@@ -53,6 +79,8 @@ export interface ChatSession {
   updatedAt: string;
   activeAgentId: string;
   messages: SessionMessage[];
+  managerAgentId?: string;   // 当前会话统筹管理的 Agent ID
+  activePlan?: WorkPlan;     // 会话当前执行中的协作计划
 }
 
 export interface MaestroConfig {

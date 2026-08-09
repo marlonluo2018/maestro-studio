@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { ChatSession, SessionIndexItem, SessionMessage } from './types.js';
+import { ChatSession, SessionIndexItem, SessionMessage, WorkPlan } from './types.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'maestro-data');
 const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
@@ -154,7 +154,11 @@ export function saveSessionDetail(session: ChatSession): void {
 }
 
 // 创建新会话
-export function createSession(activeAgentId: string, initialTitle: string = '新对话'): ChatSession {
+export function createSession(
+  activeAgentId: string,
+  initialTitle: string = '新对话',
+  managerAgentId?: string
+): ChatSession {
   const now = new Date().toLocaleString();
   const newSessionId = `session-${Date.now()}`;
 
@@ -164,6 +168,7 @@ export function createSession(activeAgentId: string, initialTitle: string = '新
     createdAt: now,
     updatedAt: now,
     activeAgentId,
+    managerAgentId,
     messages: []
   };
 
@@ -176,6 +181,7 @@ export function createSession(activeAgentId: string, initialTitle: string = '新
     createdAt: newSession.createdAt,
     updatedAt: newSession.updatedAt,
     activeAgentId: newSession.activeAgentId,
+    managerAgentId: newSession.managerAgentId,
     messageCount: 0
   });
   saveSessionIndex(indexItems);
@@ -188,7 +194,9 @@ export function appendMessageToSession(
   targetSessionId: string,
   userMessage: SessionMessage,
   assistantMessage: SessionMessage,
-  activeAgentId: string = 'default'
+  activeAgentId: string = 'default',
+  managerAgentId?: string,
+  activePlan?: WorkPlan
 ): ChatSession {
   let session = getSessionDetail(targetSessionId);
   const indexItems = loadSessionIndex();
@@ -208,11 +216,21 @@ export function appendMessageToSession(
       createdAt: new Date().toLocaleString(),
       updatedAt: new Date().toLocaleString(),
       activeAgentId,
+      managerAgentId,
+      activePlan,
       messages: []
     };
-  } else if (session.title === '新对话' && userMessage.text) {
-    const cleanPrompt = userMessage.text.trim().replace(/\n/g, ' ');
-    session.title = cleanPrompt.slice(0, 15) + (cleanPrompt.length > 15 ? '...' : '');
+  } else {
+    if (session.title === '新对话' && userMessage.text) {
+      const cleanPrompt = userMessage.text.trim().replace(/\n/g, ' ');
+      session.title = cleanPrompt.slice(0, 15) + (cleanPrompt.length > 15 ? '...' : '');
+    }
+    if (managerAgentId) {
+      session.managerAgentId = managerAgentId;
+    }
+    if (activePlan) {
+      session.activePlan = activePlan;
+    }
   }
 
   session.messages.push(userMessage, cleanAssistantMessage);
@@ -227,7 +245,8 @@ export function appendMessageToSession(
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     activeAgentId: session.activeAgentId,
-    messageCount: session.messages.length
+    messageCount: session.messages.length,
+    managerAgentId: session.managerAgentId
   };
 
   if (indexIdx !== -1) {
@@ -278,4 +297,24 @@ export function deleteSession(sessionId: string): boolean {
   saveSessionIndex(newIndexItems);
 
   return newIndexItems.length < indexItems.length;
+}
+
+// 获取会话的结构化历史对话上下文 (支持滑动窗口防 Token 溢出)
+export function getFormattedSessionContext(sessionId: string, maxTurnCount: number = 8): string {
+  const session = getSessionDetail(sessionId);
+  if (!session || !session.messages || session.messages.length === 0) {
+    return '';
+  }
+
+  // 截取最近的 maxTurnCount 条消息 (例如最近的 4 轮对话 = 8 条消息)
+  const recentMessages = session.messages.slice(-maxTurnCount);
+
+  let context = "--- [历史对话上下文 - 记忆记忆] ---\n";
+  for (const msg of recentMessages) {
+    const senderLabel = msg.sender === 'user' ? `用户 (${msg.userNickname || 'Ning'})` : `助理 (${msg.agentName || 'Maestro'})`;
+    context += `[${senderLabel} • ${msg.timestamp}]:\n${msg.text}\n\n`;
+  }
+  context += "--- [历史对话记忆结束] ---\n\n";
+
+  return context;
 }
