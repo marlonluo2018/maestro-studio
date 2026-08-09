@@ -25,6 +25,7 @@ export interface UserProfile {
   role: string;              // 角色
   preferredLanguage: string; // 偏好语言
   customInstructions: string;// 偏好习惯/自定义 Prompt 约束
+  theme?: 'dark' | 'light';  // 颜色主题：明/暗色调
 }
 
 export interface DeliverableMeta {
@@ -116,7 +117,8 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   nickname: '',
   role: '',
   preferredLanguage: '中文',
-  customInstructions: ''
+  customInstructions: '',
+  theme: 'dark'
 };
 
 export const DEFAULT_CONFIG: MaestroConfig = {

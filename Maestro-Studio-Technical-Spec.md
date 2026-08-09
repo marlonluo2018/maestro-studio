@@ -137,13 +137,18 @@
 * **7. Stdin 内存管道流统一驱动 (Stdin Unified Pipeline)**：
   * 彻底抛弃命令行参数传参，系统提示词、Agent 能力名录、多轮历史对话全部改由 `child.stdin.write` 写入内存流，100% 免疫 Windows 8191 字符命令行超长截断错误。
 * **8. 动态 Hub-and-Spoke 管理者闭环 (Dynamic Orchestrator Loop)**：
-  * Worker Agent 完成任务后，编排器自动捕获交接信号，将控制权、工作总结与上下文自动回调给统筹管理者 Agent（如老马），由管理者决定是否结束并向用户做最终总结汇报，实现任务拆解、分发、执行与汇总的真正闭环。
+  * **交接接棒**：Worker Agent 完成任务后，编排器自动捕获交接信号，将控制权、工作总结与上下文自动回调给统筹管理者 Agent（如老马），由管理者决定是否结束并向用户做最终总结汇报，实现任务拆解、分发、执行与汇总的真正闭环。
+  * **角色权限隔离**：仅管理者 Agent 注入全量 `Agent Manifest`（拥有天眼），普通 Worker 节点不注入 Manifest，保证 Token 最小化与极高专注度。
 * **9. 多 Agent 顺序流式卡片裂变 (Stream Card Spawning)**：
   * 前端 SSE 解析器感知 `eventData.agentName`，当检测到新 Agent 接棒时，自动在最下方按时间顺序裂变出全新的专属消息卡片，彻底解决打字流合并在同一个卡片中的错位 display Bug。
 * **10. 交互体验精细化 (UX Enhancements)**：
   * Chat 输入框支持 `Shift + Enter` 换行且在 1~6 行间根据内容动态自适应平滑拉伸。
   * 消息流生成时平滑自动下滚至最底部（`scrollIntoView`），用户永远优先看到最新生成的内容。
   * 工作状态指示器 (`⚡ 🤖 【老袁】 正在思考...`) 零延迟实时响应当前实际在工作的 Agent。
+* **11. 桌面级全套双语国际化 (Complete i18n & Theme System)**：
+  * 包含 `README.md` 与 `README_EN.md` GitHub 页面导航双语，以及前端 React 轻量级动态 `locales.ts` 字典。
+  * 深度关联 `userProfile.preferredLanguage`，支持一键无感全界面中英文切换，并自动输出中英文版 `[DELIVERY NOTICE]` 交付协议。
+  * 提供 `☀️ / 🌙` 明暗双色调高对比度实时主题切换系统。
 
 ---
 

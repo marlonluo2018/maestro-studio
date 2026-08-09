@@ -3,6 +3,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { AgentModal } from './components/AgentModal';
 import { SessionSidebar } from './components/SessionSidebar';
 import { MaestroConfig, DEFAULT_CONFIG, ChatSession, SessionMessage, SubAgentConfig } from './config/types';
+import { getTranslation, getThemeColors } from './i18n/locales';
 
 function formatTimeMin(): string {
   const d = new Date();
@@ -400,13 +401,29 @@ export const App: React.FC = () => {
   };
 
   const activeAgent = config.agents.find((a) => a.id === config.activeAgentId) || config.agents[0];
+  const t = getTranslation(config.userProfile?.preferredLanguage);
+  const colors = getThemeColors(config.userProfile?.theme);
+
+  const handleToggleTheme = () => {
+    const currentTheme = config.userProfile?.theme || 'dark';
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const updated: MaestroConfig = {
+      ...config,
+      userProfile: {
+        ...config.userProfile,
+        theme: nextTheme
+      }
+    };
+    handleSaveConfig(updated);
+  };
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', backgroundColor: '#0f172a', color: '#f8fafc' }}>
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', backgroundColor: colors.bg, color: colors.text }}>
       {/* 1. 左侧 Session 历史会话边栏 */}
       <SessionSidebar
         sessions={sessions}
         activeSessionId={currentSessionId}
+        userProfile={config.userProfile}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         onDeleteSession={handleDeleteSession}
@@ -415,15 +432,35 @@ export const App: React.FC = () => {
 
       {/* 2. 右侧 Chat 对话主视窗 */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', boxSizing: 'border-box' }}>
-        <header style={{ borderBottom: '1px solid #334155', paddingBottom: '12px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <header style={{ borderBottom: `1px solid ${colors.border}`, paddingBottom: '12px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>🎵 Maestro Studio</h1>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8' }}>
-              直接驱动 CLI 命令行（OpenCode, Claude Code, Codex）的多 Agent 工作台
+            <h1 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>🎵 {t.appName}</h1>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: colors.textMuted }}>
+              {t.appSubtitle}
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* ☀️ / 🌙 明暗主题切换按钮 */}
+            <button
+              onClick={handleToggleTheme}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '18px',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.15s ease'
+              }}
+              title={config.userProfile?.theme === 'light' ? '切换为深色模式 (Switch to Dark Mode)' : '切换为浅色模式 (Switch to Light Mode)'}
+            >
+              {config.userProfile?.theme === 'light' ? '🌙' : '☀️'}
+            </button>
+
             <button
               onClick={() => {
                 setEditingAgentId(null);
@@ -439,29 +476,29 @@ export const App: React.FC = () => {
                 fontWeight: 'bold'
               }}
             >
-              + 添加 Agent
+              {t.addAgent}
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
               style={{
                 padding: '8px 14px',
                 borderRadius: '6px',
-                border: '1px solid #334155',
-                backgroundColor: '#1e293b',
-                color: '#f8fafc',
+                border: `1px solid ${colors.border}`,
+                backgroundColor: colors.card,
+                color: colors.text,
                 cursor: 'pointer',
                 fontWeight: 'bold'
               }}
             >
-              ⚙️ 系统设置
+              {t.settings}
             </button>
           </div>
         </header>
 
         {/* 🌟🌟🌟 主界面展示所有配置好的 Agent 角色卡片列表 🌟🌟🌟 */}
         <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px', fontWeight: 'bold' }}>
-            选择当前对话的 Agent 角色（点击快速切换）:
+          <div style={{ fontSize: '12px', color: colors.textMuted, marginBottom: '8px', fontWeight: 'bold' }}>
+            {t.selectAgentNotice}
           </div>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
             {config.agents.map((agent) => {
@@ -475,8 +512,8 @@ export const App: React.FC = () => {
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    backgroundColor: isSelected ? '#0284c7' : '#1e293b',
-                    border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
+                    backgroundColor: isSelected ? colors.activeBg : colors.card,
+                    border: isSelected ? `1px solid ${colors.activeBorder}` : `1px solid ${colors.border}`,
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
@@ -486,7 +523,7 @@ export const App: React.FC = () => {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ fontSize: '13px', color: isSelected ? '#ffffff' : '#e2e8f0' }}>
+                    <strong style={{ fontSize: '13px', color: isSelected ? '#ffffff' : colors.text }}>
                       🤖 {agent.name}
                     </strong>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -496,8 +533,8 @@ export const App: React.FC = () => {
                             fontSize: '10px',
                             padding: '1px 5px',
                             borderRadius: '4px',
-                            backgroundColor: isSelected ? '#0369a1' : '#334155',
-                            color: '#e0f2fe'
+                            backgroundColor: isSelected ? '#0369a1' : colors.bg,
+                            color: isSelected ? '#e0f2fe' : colors.textMuted
                           }}
                         >
                           {agent.tag}
@@ -512,7 +549,7 @@ export const App: React.FC = () => {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: isSelected ? '#ffffff' : '#94a3b8',
+                          color: isSelected ? '#ffffff' : colors.textMuted,
                           fontSize: '12px',
                           cursor: 'pointer',
                           padding: '0 2px'
@@ -523,8 +560,8 @@ export const App: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: isSelected ? '#bae6fd' : '#64748b' }}>
-                    CLI: {harness ? harness.name : '未绑定'}
+                  <div style={{ fontSize: '11px', color: isSelected ? '#bae6fd' : colors.textMuted }}>
+                    CLI: {harness ? harness.name : t.cliUnbound}
                   </div>
                 </div>
               );
@@ -545,12 +582,14 @@ export const App: React.FC = () => {
               const assistantDisplayName = msg.agentName || activeAgent?.name || 'Maestro 助理';
               const displayName = msg.sender === 'user' ? userDisplayName : assistantDisplayName;
 
-              return (
+                  return (
                 <div
                   key={msg.id}
                   style={{
                     alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                    backgroundColor: msg.sender === 'user' ? '#0284c7' : '#1e293b',
+                    backgroundColor: msg.sender === 'user' ? colors.activeBg : colors.card,
+                    color: msg.sender === 'user' ? '#ffffff' : colors.text,
+                    border: msg.sender === 'user' ? 'none' : `1px solid ${colors.border}`,
                     padding: '12px 16px',
                     borderRadius: '8px',
                     maxWidth: '80%',
@@ -559,7 +598,7 @@ export const App: React.FC = () => {
                     lineHeight: '1.5'
                   }}
                 >
-                  <div style={{ fontSize: '11px', color: msg.sender === 'user' ? '#bae6fd' : '#64748b', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '11px', color: msg.sender === 'user' ? '#ffffff' : colors.textMuted, marginBottom: '4px', opacity: 0.8 }}>
                     {displayName} • {msg.timestamp}
                   </div>
                   {msg.text || (loading && msg.sender === 'assistant' ? '⚡ 输入流实时打字中...' : '')}
@@ -574,8 +613,12 @@ export const App: React.FC = () => {
         <div style={{ position: 'relative', marginTop: '16px' }}>
           {/* @Mention 选择菜单 */}
           {showMentionPopup && filteredAgents.length > 0 && (
-            <div style={mentionPopupStyle}>
-              <div style={{ fontSize: '11px', color: '#64748b', padding: '6px 10px', borderBottom: '1px solid #334155' }}>
+            <div style={{
+              ...mentionPopupStyle,
+              backgroundColor: colors.card,
+              border: `1px solid ${colors.border}`
+            }}>
+              <div style={{ fontSize: '11px', color: colors.textMuted, padding: '6px 10px', borderBottom: `1px solid ${colors.border}` }}>
                 选择要 @调用的 Agent 角色
               </div>
               {filteredAgents.map((agent, idx) => {
@@ -587,8 +630,8 @@ export const App: React.FC = () => {
                     onClick={() => handleSelectMentionAgent(agent)}
                     style={{
                       ...mentionItemStyle,
-                      backgroundColor: isSelected ? '#0284c7' : 'transparent',
-                      color: isSelected ? '#ffffff' : '#f8fafc'
+                      backgroundColor: isSelected ? colors.activeBg : 'transparent',
+                      color: isSelected ? (config.userProfile?.theme === 'light' ? '#0f172a' : '#ffffff') : colors.text
                     }}
                   >
                     <div>
@@ -598,8 +641,8 @@ export const App: React.FC = () => {
                           {agent.tag}
                         </span>
                       )}
-                      <span style={{ fontSize: '11px', color: isSelected ? '#e0f2fe' : '#94a3b8', marginLeft: '6px' }}>
-                        ({harness ? harness.name : '未绑定 CLI'})
+                      <span style={{ fontSize: '11px', color: isSelected ? (config.userProfile?.theme === 'light' ? '#0369a1' : '#e0f2fe') : colors.textMuted, marginLeft: '6px' }}>
+                        ({harness ? harness.name : t.cliUnbound})
                       </span>
                     </div>
                   </div>
@@ -615,8 +658,8 @@ export const App: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: '#0f172a',
-                border: '1px solid #38bdf8',
+                backgroundColor: colors.card,
+                border: `1px solid ${colors.border}`,
                 borderRadius: '6px',
                 padding: '8px 12px',
                 fontSize: '12px',
@@ -627,7 +670,7 @@ export const App: React.FC = () => {
             >
               <span style={{ fontSize: '13px' }}>⚡</span>
               <span>
-                <strong>🤖 【{workingAgentName || activeAgent?.name || 'Maestro 智能体'}】</strong> 正在思考与工作，请稍候...
+                <strong>🤖 【{workingAgentName || activeAgent?.name || 'Maestro'}】</strong> {t.thinking}
               </span>
             </div>
           )}
@@ -638,15 +681,15 @@ export const App: React.FC = () => {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={`给 ${activeAgent?.name || 'Maestro'} 下达任务 (输入 @ 快速切唤指定 Agent，Shift + Enter 换行)...`}
+              placeholder={`@${activeAgent?.name || 'Maestro'} ${t.inputPlaceholder}`}
               rows={Math.min(6, Math.max(1, input.split('\n').length))}
               style={{
                 flex: 1,
                 padding: '12px',
                 borderRadius: '6px',
-                border: '1px solid #334155',
-                backgroundColor: '#1e293b',
-                color: '#fff',
+                border: `1px solid ${colors.border}`,
+                backgroundColor: colors.inputBg,
+                color: colors.text,
                 outline: 'none',
                 resize: 'none',
                 fontFamily: 'inherit',
@@ -670,7 +713,7 @@ export const App: React.FC = () => {
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}
             >
-              发送
+              {t.send}
             </button>
           </div>
         </div>

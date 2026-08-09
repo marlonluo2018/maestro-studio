@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MaestroConfig, HarnessConfig, HARNESS_PRESETS, PresetKey, UserProfile, DEFAULT_USER_PROFILE } from '../config/types';
+import { getTranslation } from '../i18n/locales';
 
 interface SettingsModalProps {
   config: MaestroConfig;
@@ -167,12 +168,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
     onClose();
   };
 
+  const t = getTranslation(localConfig.userProfile?.preferredLanguage);
+
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
         {/* Modal Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', color: '#38bdf8' }}>⚙️ Maestro Studio 系统设置</h2>
+          <h2 style={{ margin: 0, fontSize: '18px', color: '#38bdf8' }}>{t.settingsTitle}</h2>
           <button onClick={onClose} style={closeBtnStyle}>✕</button>
         </div>
 
@@ -182,13 +185,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
             onClick={() => setActiveTab('profile')}
             style={{ ...tabStyle, borderBottom: activeTab === 'profile' ? '2px solid #38bdf8' : 'none', color: activeTab === 'profile' ? '#38bdf8' : '#94a3b8' }}
           >
-            👤 用户 Profile 设置
+            {t.userProfileTab}
           </button>
           <button
             onClick={() => setActiveTab('harnesses')}
             style={{ ...tabStyle, borderBottom: activeTab === 'harnesses' ? '2px solid #38bdf8' : 'none', color: activeTab === 'harnesses' ? '#38bdf8' : '#94a3b8' }}
           >
-            💻 Harness CLI 引擎管理
+            {t.harnessManagerTab}
           </button>
         </div>
 
@@ -202,7 +205,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={labelStyle}>
-                  用户昵称 / 称呼 <span style={{ color: '#ef4444' }}>*</span>:
+                  {t.userNicknameLabel} <span style={{ color: '#ef4444' }}>*</span>:
                 </label>
                 <input
                   type="text"
@@ -214,7 +217,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
               </div>
 
               <div>
-                <label style={labelStyle}>职业 / 角色定位:</label>
+                <label style={labelStyle}>{t.userRoleLabel}:</label>
                 <input
                   type="text"
                   value={profile.role}
@@ -226,7 +229,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
             </div>
 
             <div>
-              <label style={labelStyle}>AI 回答偏好语言:</label>
+              <label style={labelStyle}>{t.preferredLangLabel}:</label>
               <select
                 value={profile.preferredLanguage}
                 onChange={(e) => setProfile({ ...profile, preferredLanguage: e.target.value })}
@@ -234,12 +237,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
               >
                 <option value="中文">中文 (Chinese)</option>
                 <option value="English">English</option>
-                <option value="双语 (Bilingual)">双语 (Bilingual)</option>
               </select>
             </div>
 
             <div>
-              <label style={labelStyle}>自定义交互指令 / 代码风格偏好 (Custom Instructions):</label>
+              <label style={labelStyle}>{t.customInstructionsLabel}:</label>
               <textarea
                 value={profile.customInstructions}
                 onChange={(e) => setProfile({ ...profile, customInstructions: e.target.value })}
@@ -257,7 +259,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
             {/* 下拉菜单与添加区域 */}
             <div style={addBarSectionStyle}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
-                <label style={{ fontSize: '13px', color: '#94a3b8', whiteSpace: 'nowrap' }}>选择 Harness:</label>
+                <label style={{ fontSize: '13px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{t.selectHarnessLabel}</label>
                 {availablePresets.length > 0 ? (
                   <>
                     <select
@@ -273,7 +275,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
                     </select>
 
                     <button onClick={handleAddHarness} style={addBtnStyle}>
-                      + 添加 Harness
+                      {t.addHarnessBtn}
                     </button>
                   </>
                 ) : (
@@ -286,7 +288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
 
             {/* ITEM 列表区域 */}
             <div style={{ marginTop: '12px' }}>
-              <h4 style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '14px' }}>已配置的 Harness CLI 引擎列表</h4>
+              <h4 style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '14px' }}>{t.configuredHarnessesTitle}</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
                 {localConfig.harnesses.length === 0 ? (
                   <div style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
@@ -316,7 +318,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         {localConfig.defaultHarnessId === item.id ? (
                           <button style={activeDefaultBtnStyle} disabled>
-                            ⭐ 默认 CLI
+                            {t.currentDefaultCli}
                           </button>
                         ) : (
                           <button
@@ -324,7 +326,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
                             style={setDefaultBtnStyle}
                             title="设为直连驱动的默认 CLI 引擎"
                           >
-                            设为默认 CLI
+                            {t.setAsDefaultCli}
                           </button>
                         )}
 
@@ -333,7 +335,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
                           disabled={item.testStatus === 'testing'}
                           style={testBtnStyle}
                         >
-                          {item.testStatus === 'testing' ? '测试中...' : '⚡ 测试'}
+                          {item.testStatus === 'testing' ? t.testingBtn : t.testBtn}
                         </button>
 
                         <button
@@ -341,7 +343,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
                           style={deleteBtnStyle}
                           title="删除该 Harness 节点"
                         >
-                          🗑️ 删除
+                          {t.delete}
                         </button>
                       </div>
                     </div>
@@ -354,9 +356,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, isOpen, on
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
-          <button onClick={onClose} style={cancelBtnStyle}>取消</button>
+          <button onClick={onClose} style={cancelBtnStyle}>{t.cancel}</button>
           <button onClick={handleSave} style={saveBtnStyle}>
-            保存并应用
+            {t.saveAndApply}
           </button>
         </div>
       </div>

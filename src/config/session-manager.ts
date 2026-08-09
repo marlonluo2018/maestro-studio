@@ -189,35 +189,43 @@ export function createSession(
   return newSession;
 }
 
-// 智能正则解析 Agent 回复中的 🔔 [交付通知] 和 📝 [工作总结]
+// 智能正则解析 Agent 回复中的 🔔 [交付通知]/[DELIVERY NOTICE] 和 📝 [工作总结]/[WORK SUMMARY] (双语兼容)
 export function parseDeliverableText(text: string): DeliverableMeta | null {
   if (!text) return null;
 
-  // 必须含有核心关键字才认为是正式的交付物通知
-  if (!text.includes('交付通知') && !text.includes('工作总结')) {
+  // 必须含有核心关键字才认为是正式的交付物通知 (支持中英文关键词)
+  const isChineseFormat = text.includes('交付通知') || text.includes('工作总结');
+  const isEnglishFormat = text.includes('DELIVERY NOTICE') || text.includes('WORK SUMMARY');
+
+  if (!isChineseFormat && !isEnglishFormat) {
     return null;
   }
 
   try {
-    // 1. 匹配目标用户 (如: • 👤 @用户: @Marlon 或 @Ning)
-    const userMatch = text.match(/@用户\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/👤\s*@?用户\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
-    const targetUser = userMatch ? userMatch[1].trim() : 'Ning';
+    // 1. 匹配目标用户 (如: • 👤 @用户: @Marlon 或 @User: @Marlon)
+    const userMatch = text.match(/@(用户|User)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || 
+                      text.match(/👤\s*@?(用户|User)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const targetUser = userMatch ? userMatch[2].trim() : 'Ning';
 
-    // 2. 匹配管理者 (如: • 👑 @管理者: @无 或 @老马)
-    const managerMatch = text.match(/@管理者\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/👑\s*@?管理者\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
-    const managerAgentName = managerMatch ? managerMatch[1].trim() : '无';
+    // 2. 匹配管理者 (如: • 👑 @管理者: @老马 或 @Manager: @LaoMa)
+    const managerMatch = text.match(/@(管理者|Manager)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || 
+                         text.match(/👑\s*@?(管理者|Manager)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const managerAgentName = managerMatch ? managerMatch[2].trim() : '无';
 
-    // 3. 匹配下一个接收 Agent (如: • 🎯 @下一个接收Agent: @老罗)
-    const nextMatch = text.match(/@下一个接收Agent\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/🎯\s*@下一个接收Agent\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || text.match(/🎯\s*@?下一个接收\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
-    const nextAgentName = nextMatch ? nextMatch[1].trim() : '无';
+    // 3. 匹配下一个接收 Agent (如: • 🎯 @下一个接收Agent: @老罗 或 @NextAgent: @LaoLuo)
+    const nextMatch = text.match(/@(下一个接收Agent|NextAgent|Next Agent)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) || 
+                      text.match(/🎯\s*@?(下一个接收Agent|NextAgent|Next Agent)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i) ||
+                      text.match(/🎯\s*@?(下一个接收|Next)\s*:\s*@?([a-zA-Z0-9_\u4e00-\u9fa5]+)/i);
+    const nextAgentName = nextMatch ? nextMatch[2].trim() : '无';
 
-    // 4. 提取 [工作总结] 段落内容
+    // 4. 提取 [工作总结] 或 [WORK SUMMARY] 段落内容
     let workSummary = "";
-    const summaryMatch = text.match(/📝\s*\[工作总结\]([\s\S]*?)(💬|===|$)/i) || text.match(/\[工作总结\]([\s\S]*?)(💬|===|$)/i);
+    const summaryMatch = text.match(/📝\s*\[(工作总结|WORK SUMMARY|Work Summary)\]([\s\S]*?)(💬|===|$)/i) || 
+                         text.match(/\[(工作总结|WORK SUMMARY|Work Summary)\]([\s\S]*?)(💬|===|$)/i);
     if (summaryMatch) {
-      workSummary = summaryMatch[1].trim();
+      workSummary = summaryMatch[2].trim();
     } else {
-      workSummary = "完成阶段性工作交付。";
+      workSummary = isEnglishFormat ? "Completed sub-task deliverables." : "完成阶段性工作交付。";
     }
 
     return {

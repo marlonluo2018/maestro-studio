@@ -3,6 +3,8 @@
 > **Orchestrating AI Agents with Official CLI & SDK Engines**  
 > 一款基于原厂 CLI (OpenCode, Claude Code, Codex) 与官方 SDK 驱动的桌面多智能体对话工作台应用。
 
+[ 🇨🇳 中文入口 ](README.md) | [ 🇺🇸 English ](README_EN.md)
+
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/marlonluo2018/maestro-studio)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React](https://img.shields.io/badge/React-19.x-61dafb.svg)](https://react.dev/)

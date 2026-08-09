@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MaestroConfig, SubAgentConfig } from '../config/types';
+import { getTranslation } from '../i18n/locales';
 
 interface AgentModalProps {
   config: MaestroConfig;
@@ -11,6 +12,7 @@ interface AgentModalProps {
 
 export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose, onSave, targetAgentId }) => {
   const isEditMode = !!targetAgentId;
+  const t = getTranslation(config.userProfile?.preferredLanguage);
 
   // Form Fields State
   const [agentName, setAgentName] = useState('');
@@ -157,7 +159,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
         {/* Modal Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2 style={{ margin: 0, fontSize: '18px', color: '#38bdf8' }}>
-            {isEditMode ? `✏️ 编辑 Agent: ${agentName}` : '🤖 添加新 Agent 角色'}
+            {isEditMode ? `${t.agentModalEditTitle}: ${agentName}` : t.agentModalAddTitle}
           </h2>
           <button onClick={onClose} style={closeBtnStyle}>✕</button>
         </div>
@@ -171,7 +173,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
           <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr', gap: '10px', marginBottom: '12px' }}>
             <div>
               <label style={labelStyle}>
-                Agent 名字 <span style={{ color: '#ef4444' }}>*</span>:
+                {t.agentNameLabel} <span style={{ color: '#ef4444' }}>*</span>:
               </label>
               <input
                 type="text"
@@ -183,7 +185,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
             </div>
 
             <div>
-              <label style={labelStyle}>Tag 区分标签:</label>
+              <label style={labelStyle}>{t.agentTagLabel}:</label>
               <input
                 type="text"
                 placeholder="如: 审查 / 架构"
@@ -194,7 +196,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
             </div>
 
             <div>
-              <label style={labelStyle}>绑定的 CLI 引擎:</label>
+              <label style={labelStyle}>{t.boundCliLabel}:</label>
               <select
                 value={harnessId}
                 onChange={(e) => setHarnessId(e.target.value)}
@@ -211,7 +213,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
 
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>专属 System Prompt / 角色提示词:</label>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>{t.systemPromptLabel}</label>
               <button
                 type="button"
                 onClick={handleOptimizePrompt}
@@ -228,7 +230,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
                   transition: 'all 0.15s ease'
                 }}
               >
-                {isOptimizing ? '⏳ 正在智能优化中...' : '✨ 优化系统提示词'}
+                {isOptimizing ? t.optimizingBtn : t.optimizePromptBtn}
               </button>
             </div>
             <textarea
@@ -241,7 +243,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
           </div>
 
           <div style={{ marginBottom: '8px' }}>
-            <label style={labelStyle}>角色职责描述:</label>
+            <label style={labelStyle}>{t.descriptionLabel}:</label>
             <input
               type="text"
               placeholder="如: 基于 OpenCode CLI 驱动的代码审查角色"
@@ -257,15 +259,15 @@ export const AgentModal: React.FC<AgentModalProps> = ({ config, isOpen, onClose,
           <div>
             {isEditMode && (
               <button onClick={handleDelete} style={deleteBtnStyle}>
-                🗑️ 删除该角色
+                {t.deleteRole}
               </button>
             )}
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={onClose} style={cancelBtnStyle}>取消</button>
+            <button onClick={onClose} style={cancelBtnStyle}>{t.cancel}</button>
             <button onClick={handleSubmit} style={saveBtnStyle}>
-              {isEditMode ? '保存修改' : '确认添加'}
+              {isEditMode ? t.saveChanges : t.confirmAdd}
             </button>
           </div>
         </div>

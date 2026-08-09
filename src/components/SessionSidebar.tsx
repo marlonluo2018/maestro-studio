@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { ChatSession, SessionIndexItem } from '../config/types';
+import { ChatSession, SessionIndexItem, UserProfile } from '../config/types';
+import { getTranslation, getThemeColors } from '../i18n/locales';
 
 interface SessionSidebarProps {
   sessions: Array<SessionIndexItem | ChatSession>;
   activeSessionId: string | null;
+  userProfile?: UserProfile;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
   onDeleteSession: (sessionId: string) => void;
@@ -13,11 +15,13 @@ interface SessionSidebarProps {
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   sessions,
   activeSessionId,
+  userProfile,
   onSelectSession,
   onNewSession,
   onDeleteSession,
   onRenameSession
 }) => {
+  const t = getTranslation(userProfile?.preferredLanguage);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -55,23 +59,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
   };
 
+  const colors = getThemeColors(userProfile?.theme);
+
   return (
-    <aside style={sidebarContainerStyle}>
+    <aside style={{ ...sidebarContainerStyle, backgroundColor: colors.sidebarBg, borderRight: `1px solid ${colors.border}` }}>
       {/* Sidebar Header & New Session Button */}
-      <div style={{ padding: '16px 12px 12px 16px', borderBottom: '1px solid #334155' }}>
+      <div style={{ padding: '16px 12px 12px 16px', borderBottom: `1px solid ${colors.border}` }}>
         <button onClick={onNewSession} style={newSessionBtnStyle}>
-          + 新建对话
+          {t.newSession}
         </button>
       </div>
 
       {/* Session History List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', padding: '6px 8px', textTransform: 'uppercase' }}>
-          历史对话
+        <div style={{ fontSize: '11px', color: colors.textMuted, fontWeight: 'bold', padding: '6px 8px', textTransform: 'uppercase' }}>
+          {t.sessionHistory}
         </div>
 
         {sessions.length === 0 ? (
-          <div style={{ padding: '16px 8px', fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
+          <div style={{ padding: '16px 8px', fontSize: '12px', color: colors.textMuted, textAlign: 'center' }}>
             暂无历史对话
           </div>
         ) : (
@@ -85,8 +91,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 onClick={() => !isEditing && onSelectSession(session.id)}
                 style={{
                   ...sessionItemStyle,
-                  backgroundColor: isActive ? '#0284c7' : 'transparent',
-                  color: isActive ? '#ffffff' : '#cbd5e1'
+                  backgroundColor: isActive ? colors.activeBg : 'transparent',
+                  color: isActive ? '#ffffff' : colors.text
                 }}
               >
                 {isEditing ? (
@@ -141,21 +147,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       {/* 删除确认二次弹窗 Modal */}
       {sessionToDelete && (
         <div style={overlayStyle} onClick={() => setSessionToDelete(null)}>
-          <div style={confirmModalStyle} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...confirmModalStyle, backgroundColor: colors.card, border: `1px solid ${colors.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#ef4444' }}>
-              ❓ 确认删除对话
+              ❓ {t.delete}
             </h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#cbd5e1', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: colors.text, lineHeight: '1.5' }}>
               您确定要删除历史对话 <strong style={{ color: '#38bdf8' }}>「{sessionToDelete.title}」</strong> 吗？
               <br />
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>此操作无法撤销。</span>
+              <span style={{ fontSize: '12px', color: colors.textMuted }}>此操作无法撤销。</span>
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button onClick={() => setSessionToDelete(null)} style={cancelBtnStyle}>
-                取消
+              <button onClick={() => setSessionToDelete(null)} style={{ ...cancelBtnStyle, color: colors.textMuted, border: `1px solid ${colors.border}` }}>
+                {t.cancel}
               </button>
               <button onClick={handleConfirmDelete} style={deleteConfirmBtnStyle}>
-                确认删除
+                {t.delete}
               </button>
             </div>
           </div>

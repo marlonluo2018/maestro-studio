@@ -442,7 +442,33 @@ app.post('/api/chat-stream', async (req: Request, res: Response) => {
   const managerAgent = config.agents.find((a) => a.id === effectiveManagerId);
   const managerName = managerAgent ? managerAgent.name : activeAgent.name;
 
-  const deliveryProtocol = `
+  const isEnglishUser = config.userProfile?.preferredLanguage === 'English';
+
+  const deliveryProtocol = isEnglishUser ? `
+=== [MANDATORY DELIVERABLE & WORK SUMMARY PROTOCOL] ===
+When you complete your assigned task, you MUST format your output with this EXACT structured section at the very top of your response:
+
+🔔 [DELIVERY NOTICE]
+• 👤 @User: @${userNicknameToUse}
+• 👑 @Manager: @${managerName}
+• 🎯 @NextAgent: [Name of the next Agent to take over, e.g., @LaoLuo, or @无 if this is the final step]
+
+📝 [WORK SUMMARY]
+1. Deliverables: [Brief summary of generated files, features, or analysis reports]
+2. Physical Changes: [List of modified or created files, executed shell commands]
+3. Verification: [Linter, compiler, or test verification results, e.g., "Vite build 100% passed"]
+
+💬 [HANDOFF NOTES FOR NEXT AGENT]
+[Handoff instructions, notes, or specific guidelines for the next receiving agent]
+
+⚡ [CRITICAL ROLE SEPARATION RULE]
+- If you specify a next receiving agent (@NextAgent is NOT "@无"), you are acting as a ROUTER/MANAGER.
+- In this case, you MUST NOT execute the final task (e.g., coding or translation) yourself.
+- Your response should ONLY contain the Delivery Notice, Work Summary of your routing plan, and Handoff Notes. Leave the execution 100% to the next agent!
+- Only when @NextAgent is "@无" should you act as a WORKER and output final deliverables.
+
+=======================================================
+`.trim() : `
 === [MANDATORY DELIVERABLE & WORK SUMMARY PROTOCOL] ===
 When you complete your assigned task, you MUST format your output with this EXACT structured section at the very top of your response:
 
@@ -473,8 +499,9 @@ When you complete your assigned task, you MUST format your output with this EXAC
   console.log(`🤖 Agent: [${activeAgent.name}], Harness: [${harness.name}]`);
   console.log(`========================================`);
 
-  const agentManifest = getAgentManifestString();
-  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}\n\n${agentManifest}\n\n${deliveryProtocol}`.trim();
+  const isManager = activeAgent.id === effectiveManagerId;
+  const agentManifest = isManager ? getAgentManifestString() : "";
+  const agentIdentityPrompt = `你的名字是「${activeAgent.name}」。\n${activeAgent.systemPrompt || ''}${agentManifest ? '\n\n' + agentManifest : ''}\n\n${deliveryProtocol}`.trim();
 
   // 获取会话中此前轮次的对话历史上下文，级联发送，建立多轮会话记忆
   const sessionHistory = getFormattedSessionContext(targetSessionId);
@@ -534,8 +561,10 @@ When you complete your assigned task, you MUST format your output with this EXAC
         const nextHarness = config.harnesses.find((h) => h.id === nextAgent.harnessId) || config.harnesses[0];
         const nextAdapter = getSDKAdapter(nextHarness.presetKey);
         
-        // 组装下一个 Agent 的元系统指令和队友清单
-        const nextAgentIdentityPrompt = `你的名字是「${nextAgent.name}」。\n${nextAgent.systemPrompt || ''}\n\n${agentManifest}\n\n${deliveryProtocol}`.trim();
+        // 仅当下一个 Agent 是统筹管理者时才注入 Agent 清单，普通 Worker 保持人设专注执行
+        const isNextManager = nextAgent.id === effectiveManagerId;
+        const nextManifest = isNextManager ? getAgentManifestString() : "";
+        const nextAgentIdentityPrompt = `你的名字是「${nextAgent.name}」。\n${nextAgent.systemPrompt || ''}${nextManifest ? '\n\n' + nextManifest : ''}\n\n${deliveryProtocol}`.trim();
         
         // 提取交接的补充说明段落
         const handoverMatch = cleanMessageText(finalText).match(/💬\s*\[交付给下一阶段 Agent 的补充说明\]([\s\S]*)/i);
