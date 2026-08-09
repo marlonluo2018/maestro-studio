@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-ssr/
+*.local
+
+# Local Maestro data and configs
+maestro-config.json
+maestro-data/sessions/
+maestro-data/index.json
+
+# IDEs and OS files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.bak
+
+# Local tool configs
+.claude/
+.codex/
+.opencode/
