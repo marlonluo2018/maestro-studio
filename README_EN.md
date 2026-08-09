@@ -3,7 +3,7 @@
 > **Orchestrating AI Agents with Official CLI & SDK Engines**  
 > A desktop multi-agent workspace powered by native CLI engines (OpenCode, Claude Code, Codex) and official SDK adapters.
 
-[ 🇨🇳 中文入口 ](README.md) | [ 🇺🇸 English ](README_EN.md)
+[ 🇨🇳 中文文档 ](README_ZH.md) | [ 🇺🇸 English ](README.md)
 
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/marlonluo2018/maestro-studio)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
